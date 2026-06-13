@@ -1,0 +1,17 @@
+name: CIKGRec
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - numpy<2
+      - pandas
+      - tqdm
+      - prettytable==3.10.0
+      - nltk==3.8.1
+      - jsonlines
+      - scikit-learn==1.5.2
+      - torch==2.3.1
+      - torch-geometric==2.5.3
+      - sentence-transformers==3.0.1

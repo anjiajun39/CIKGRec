@@ -20,6 +20,7 @@ else:
     
 #Select in '' or '_r'. Two text cleaning strategy.
 r = '_r'
+version = 'v1'
 C = 350
 max_his_num = 30
 

@@ -78,31 +78,33 @@ class CIKGRec(torch.nn.Module):
             raise NotImplementedError
         return criterion
 
+    # 核心图传播：LightGCN部分
     def compute(self, x=None, edge_index=None, perturbed=False, mess_drop=False, layer_num=None):
-        if x == None:
+        if x is None:
             emb = self.user_entity_emb.weight
         else:
             emb = x
         if self.message_drop_rate > 0.0 and mess_drop:
             emb = self.message_drop(emb)
         all_layer = [emb]
-        if layer_num != None:
+        if layer_num is not None:
             layers = layer_num
         else:
             layers = self.layer
         for layer in range(layers):
-            if edge_index == None:
+            if edge_index is None:
                 emb = self.propagate(emb, self.edge_index)
             else:
                 emb = self.propagate(emb, edge_index)
             if perturbed:
-                random_noise = torch.rand_like(emb).to(self.config['device'])
+                random_noise = torch.rand_like(emb)
                 emb += torch.sign(emb) * F.normalize(random_noise, dim=-1) * self.eps
             all_layer.append(emb)
         all_layer = torch.stack(all_layer, dim=1)
         all_layer = torch.mean(all_layer, dim=1)
         return all_layer                                 
-        
+
+    # 推荐任务损失        
     def forward(self, user_idx, pos_item, neg_item):
         if self.edge_drop > 0.0:
             use_edge, _ = dropout_edge(edge_index=self.edge_index, force_undirected=True, p=self.edge_drop, training=self.training)
@@ -182,6 +184,7 @@ class CIKGRec(torch.nn.Module):
 
         return out_x, (mask_nodes, keep_nodes)
 
+    # User Interest Reconstruction
     def interest_recon_loss(self, edge_index):
         x = self.user_entity_emb.weight
         #mask user interest nodes

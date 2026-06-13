@@ -5,7 +5,7 @@ import torch
 from tqdm import tqdm
 import time
 
-cores = multiprocessing.cpu_count() // 2
+cores = max(1, multiprocessing.cpu_count() // 2)
 
 Ks = [20, 50, 100]
 max_K = max(Ks)
@@ -16,13 +16,27 @@ candidate_dict = None
 user_num = None
 item_num = None
 
+def init_eval_worker(worker_score_matrix, worker_rated_dict, worker_candidate_dict, worker_user_num, worker_item_num):
+    global score_matrix
+    global rated_dict
+    global candidate_dict
+    global user_num
+    global item_num
+
+    score_matrix = worker_score_matrix
+    rated_dict = worker_rated_dict
+    candidate_dict = worker_candidate_dict
+    user_num = worker_user_num
+    item_num = worker_item_num
+
+
 def precision_at_k(r, k):
     assert k >= 1
     r = np.asarray(r)[:k]
     return np.mean(r)
 
 def dcg_at_k(r, k):
-    r = np.asfarray(r)[:k]
+    r = np.asarray(r, dtype=float)[:k]
     return np.sum(r / np.log2(np.arange(2, r.size + 2)))
 
 
@@ -56,7 +70,7 @@ def test_one_user(uid):
     global candidate_dict
     global user_num
     global item_num
-    score = score_matrix[uid]
+    score = score_matrix[uid].copy()
     #mask the train items
     try:
         rated_items = np.array(list(rated_dict[uid]))
@@ -107,10 +121,14 @@ def eval_model(model, loader, dtype='test'):
         score_matrix = model.get_score_matrix()
         score_matrix = score_matrix.detach().cpu().numpy()       
     pred_true_uid = []
-    n_test_users = len(candidate_dict.keys())        
-    pool = multiprocessing.Pool(cores)
-    batch_result = pool.map(test_one_user, candidate_dict.keys())
-    pool.close()
+    test_users = list(candidate_dict.keys())
+    n_test_users = len(test_users)
+    if multiprocessing.get_start_method(allow_none=True) == 'fork' and cores > 1:
+        worker_args = (score_matrix, rated_dict, candidate_dict, user_num, item_num)
+        with multiprocessing.Pool(cores, initializer=init_eval_worker, initargs=worker_args) as pool:
+            batch_result = pool.map(test_one_user, test_users)
+    else:
+        batch_result = [test_one_user(uid) for uid in test_users]
     for re in batch_result:
             result['precision'] += re['precision']/n_test_users
             result['recall'] += re['recall']/n_test_users

@@ -7,12 +7,20 @@
 In recent years, knowledge graphs have been integrated into recommender systems as item-side auxiliary information, enhancing recommendation accuracy. However, constructing and integrating structural user-side knowledge remains a significant challenge due to the improper granularity and inherent scarcity of user-side features. Recent advancements in Large Language Models (LLMs) offer the potential to bridge this gap by leveraging their human behavior understanding and extensive real-world knowledge. Nevertheless, integrating LLMgenerated information into recommender systems presents challenges, including the risk of noisy information and the need for additional knowledge transfer. In this paper, we propose an LLM-based user-side knowledge inference method alongside a carefully designed recommendation framework to address these challenges. Our approach employs LLMs to infer user interests based on historical behaviors, integrating this user-side information with item-side and collaborative data to construct a hybrid structure: the Collaborative Interest Knowledge Graph (CIKG). Furthermore, we propose a CIKGbased recommendation framework that includes a user interest reconstruction module and a cross-domain contrastive learning module to mitigate potential noise and facilitate knowledge transfer. We conduct extensive experiments on three real-world datasets to validate the effectiveness of our method. Our approach achieves state-of-the-art performance compared to competitive baselines, particularly for users with sparse interactions.
 
 ## Environment Requirement
-Our experiments are conducted on Linux server with 24G TITAN RTX. The code has been tested under Python 3.8. The required packages are as follows:
+Our experiments are conducted on Linux server with 24G TITAN RTX. The code has been smoke-tested under Python 3.10 and Torch 2.x. A reproducible conda environment is provided in `environment.yml`:
 
-* torch == 1.13.1
-* torch-geometric == 2.3.1
-* scikit-learn == 1.0.2
-* sentence-trainsformers == 3.0.0
+```
+conda env create -f environment.yml
+conda activate CIKGRec
+```
+
+The tested package set is:
+
+* python == 3.10
+* torch == 2.3.1
+* torch-geometric == 2.5.3
+* scikit-learn == 1.5.2
+* sentence-transformers == 3.0.1
 * prettytable == 3.10.0
 * nltk == 3.8.1
 
@@ -22,7 +30,20 @@ Our experiments are conducted on Linux server with 24G TITAN RTX. The code has b
 python -u train.py --dataset book-crossing
 ```
 
-This conmand will read the best hyperparameter setting of the corresponding dataset from `config` folder and languch the training process.
+Device selection is automatic: CUDA is used first when available, then MPS on Apple Silicon, then CPU. You can also override it explicitly:
+
+```
+python -u train.py --dataset book-crossing --device mps
+python -u train.py --dataset book-crossing --device cpu
+```
+
+If a PyTorch or PyG operator is not implemented on MPS, you can let PyTorch fall back to CPU for that operator:
+
+```
+PYTORCH_ENABLE_MPS_FALLBACK=1 python -u train.py --dataset book-crossing --device mps
+```
+
+This command will read the best hyperparameter setting of the corresponding dataset from the `config` folder and launch the training process.
 
 ## Details of Important Files
 The following outlines the structure of the repository and provides a brief explanation of each file or folder:
@@ -48,4 +69,3 @@ year = {2024},
 journal = {arXiv:2412.13544},
 }
 ```
-

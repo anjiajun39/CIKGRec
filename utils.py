@@ -15,6 +15,48 @@ import re
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer  
 
+try:
+    sw = set(stopwords.words('english'))
+except LookupError:
+    sw = set()
+
+
+class _IdentityLemmatizer:
+    def lemmatize(self, word):
+        return word
+
+
+try:
+    lemmatizer = WordNetLemmatizer()
+    lemmatizer.lemmatize('tests')
+except LookupError:
+    lemmatizer = _IdentityLemmatizer()
+
+
+def is_mps_available():
+    return hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
+
+
+def resolve_device(device=None, gpu_id=0):
+    if device is not None and device != 'auto':
+        torch_device = torch.device(device)
+        if torch_device.type == 'cuda' and not torch.cuda.is_available():
+            raise RuntimeError(f'Requested {device}, but CUDA is not available.')
+        if torch_device.type == 'mps' and not is_mps_available():
+            raise RuntimeError('Requested mps, but PyTorch MPS is not available.')
+        return str(torch_device)
+
+    if torch.cuda.is_available():
+        return f'cuda:{gpu_id}'
+    if is_mps_available():
+        return 'mps'
+    return 'cpu'
+
+
+def is_cuda_device(device):
+    return torch.device(device).type == 'cuda'
+
+
 class MyLoader(object):
     def __init__(self, config, verbose=True):
         self.config = config
@@ -128,7 +170,8 @@ class MyLoader(object):
     def get_cf_loader(self, bs=1024):
         dataset = TrainDataset(self.train, self.rated_dict, self.config['users'], self.config['items'])  
         # dataset = TrainDataset(self.train, self.rated_dict, self.config['users'], self.config['entities'])  
-        return torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=bs, pin_memory=True), dataset
+        pin_memory = is_cuda_device(self.config.get('device', 'cpu'))
+        return torch.utils.data.DataLoader(dataset, shuffle=True, batch_size=bs, pin_memory=pin_memory), dataset
     
     def get_eval_data(self, dtype='valid'):
         if dtype == 'valid':
@@ -198,8 +241,11 @@ def init_seed(seed, reproducibility=True):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    if is_mps_available() and hasattr(torch, 'mps') and hasattr(torch.mps, 'manual_seed'):
+        torch.mps.manual_seed(seed)
     if reproducibility:
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
@@ -243,7 +289,7 @@ def sample_neg_triples_for_h(kg_dict, head, relation, n_sample_neg_triples, high
 
 
 def generate_kg_batch(kg_dict, batch_size, highest_neg_idx, lowest_neg_idx):
-    exist_heads = kg_dict.keys()
+    exist_heads = list(kg_dict.keys())
     if batch_size <= len(exist_heads):
         batch_head = random.sample(exist_heads, batch_size)
     else:
@@ -275,4 +321,3 @@ def clean_text(text):
     text = [lemmatizer.lemmatize(word) for word in text]    
     text = " ".join(text) #removing stopwords    
     return text
-
